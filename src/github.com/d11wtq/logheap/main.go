@@ -1,8 +1,9 @@
 package main
 
 import (
+	"bufio"
+	"fmt"
 	"github.com/samalba/dockerclient"
-	"io"
 	"os"
 	"time"
 )
@@ -44,7 +45,10 @@ func processLogs(client dockerclient.Client, j Job, done chan Job) {
 		if info, err := client.InspectContainer(j.Id); err == nil {
 			if init || info.State.Running {
 				if s, err := client.ContainerLogs(j.Id, &opts); err == nil {
-					io.Copy(os.Stdout, Demuxer(s))
+					scanner := bufio.NewScanner(Demuxer(s))
+					for scanner.Scan() {
+						fmt.Println(scanner.Text())
+					}
 					init = false
 					opts.Tail = 1 // FIXME: Not accurate!
 				}

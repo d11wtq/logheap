@@ -59,17 +59,23 @@ func (r *MultiplexedReader) fill() (int, error) {
 	if _, err = r.s.Read(header); err == nil {
 		read := 0
 		size := binary.BigEndian.Uint32(header[4:])
+		buf := make([]byte, 0)
 
 		for size > 0 {
 			payload := make([]byte, size)
 
 			if read, err = r.s.Read(payload); err == nil {
-				r.b = append(r.b, payload...)
+				buf = append(buf, payload...)
 				size -= uint32(read)
+			} else if err == io.EOF {
+				// FIXME: Why does this ever happen?
+				break
 			}
 		}
 
-		got = int(size)
+		r.b = append(r.b, buf...)
+		got = len(buf)
+
 	}
 
 	return got, err
