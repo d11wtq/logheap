@@ -4,6 +4,7 @@ import (
 	"github.com/samalba/dockerclient"
 	"io"
 	"os"
+	"time"
 )
 
 func endpoint() string {
@@ -19,9 +20,10 @@ func filteredContainers(client dockerclient.Client) []dockerclient.Container {
 
 	if list, err := client.ListContainers(true, false, ""); err == nil {
 		for _, c := range list {
-			info, _ := client.InspectContainer(c.Id)
-			if !info.Config.Tty {
-				ret = append(ret, c)
+			if info, err := client.InspectContainer(c.Id); err == nil {
+				if !info.Config.Tty {
+					ret = append(ret, c)
+				}
 			}
 		}
 	}
@@ -29,31 +31,68 @@ func filteredContainers(client dockerclient.Client) []dockerclient.Container {
 	return ret
 }
 
-func processLogs(client dockerclient.Client, id string, done chan string) {
+func processLogs(client dockerclient.Client, j Job, done chan Job) {
 	opts := dockerclient.LogOptions{
-		Stdout: true,
+		Stdout: j.Stdout,
+		Stderr: j.Stderr,
 		Follow: true,
+		Tail:   0,
+	}
+	init := true
+
+	for {
+		if info, err := client.InspectContainer(j.Id); err == nil {
+			if init || info.State.Running {
+				if s, err := client.ContainerLogs(j.Id, &opts); err == nil {
+					io.Copy(os.Stdout, Demuxer(s))
+					init = false
+					opts.Tail = 1 // FIXME: Not accurate!
+				}
+			}
+		} else {
+			break
+		}
+
+		time.Sleep(time.Second * 3)
 	}
 
-	if s, err := client.ContainerLogs(id, &opts); err == nil {
-		io.Copy(os.Stdout, Demuxer(s))
-	}
+	done <- j
+}
 
-	done <- id
+type Job struct {
+	Id     string
+	Stdout bool
+	Stderr bool
+}
+
+func queueJobs(client dockerclient.Client, jobs map[Job]bool, done chan Job) {
+	for {
+		for _, c := range filteredContainers(client) {
+			todos := []Job{
+				{Id: c.Id, Stdout: true},
+				{Id: c.Id, Stderr: true},
+			}
+
+			for _, item := range todos {
+				if !jobs[item] {
+					jobs[item] = true
+					go processLogs(client, item, done)
+				}
+			}
+		}
+		time.Sleep(time.Second * 3)
+	}
 }
 
 func main() {
-	jobs := make(map[string]bool, 10)
-	done := make(chan string)
+	jobs := make(map[Job]bool)
+	done := make(chan Job)
 
 	client, _ := dockerclient.NewDockerClient(endpoint(), nil)
 
-	for _, c := range filteredContainers(client) {
-		jobs[c.Id] = true
-		go processLogs(client, c.Id, done)
-	}
+	go queueJobs(client, jobs, done)
 
-	for id := range done {
-		delete(jobs, id)
+	for k := range done {
+		delete(jobs, k)
 	}
 }
