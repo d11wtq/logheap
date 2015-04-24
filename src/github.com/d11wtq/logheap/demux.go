@@ -64,18 +64,14 @@ func (r *MultiplexedReader) fill() (int, error) {
 		for size > 0 {
 			payload := make([]byte, size)
 
-			if read, err = r.s.Read(payload); err == nil {
+			if read, err = r.s.Read(payload); read > 0 {
 				buf = append(buf, payload...)
 				size -= uint32(read)
-			} else if err == io.EOF {
-				// FIXME: Why does this ever happen?
-				break
 			}
 		}
 
 		r.b = append(r.b, buf...)
 		got = len(buf)
-
 	}
 
 	return got, err
