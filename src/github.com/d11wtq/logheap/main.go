@@ -2,11 +2,18 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"github.com/samalba/dockerclient"
 	"os"
 	"time"
 )
+
+type Job struct {
+	Id     string
+	Stdout bool
+	Stderr bool
+}
 
 func endpoint() string {
 	if host := os.Getenv("DOCKER_HOST"); host != "" {
@@ -32,6 +39,26 @@ func filteredContainers(client dockerclient.Client) []dockerclient.Container {
 	return ret
 }
 
+func encode(j Job, s string) (string, error) {
+	var stream string
+
+	switch {
+	case j.Stderr:
+		stream = "stderr"
+	case j.Stdout:
+		stream = "stdout"
+	}
+
+	document := map[string]interface{}{
+		"message": s,
+		"host":    os.Getenv("HOSTNAME"),
+		"stream":  stream,
+	}
+
+	bytes, err := json.Marshal(document)
+	return string(bytes), err
+}
+
 func processLogs(client dockerclient.Client, j Job, done chan Job) {
 	opts := dockerclient.LogOptions{
 		Stdout: j.Stdout,
@@ -47,7 +74,9 @@ func processLogs(client dockerclient.Client, j Job, done chan Job) {
 				if s, err := client.ContainerLogs(j.Id, &opts); err == nil {
 					scanner := bufio.NewScanner(Demuxer(s))
 					for scanner.Scan() {
-						fmt.Println(scanner.Text())
+						if doc, err := encode(j, scanner.Text()); err == nil {
+							fmt.Println(doc)
+						}
 					}
 					init = false
 					opts.Tail = 1 // FIXME: Not accurate!
@@ -61,12 +90,6 @@ func processLogs(client dockerclient.Client, j Job, done chan Job) {
 	}
 
 	done <- j
-}
-
-type Job struct {
-	Id     string
-	Stdout bool
-	Stderr bool
 }
 
 func queueJobs(client dockerclient.Client, jobs map[Job]bool, done chan Job) {
