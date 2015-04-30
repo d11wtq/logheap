@@ -1,17 +1,18 @@
-package io
+package stdout
 
 import (
 	"fmt"
+	"github.com/d11wtq/logheap/io"
 	"net/url"
 )
 
 // Output handler for writing to stdout.
-type Stdout struct {
+type Output struct {
 	ch chan string
 }
 
 // Listen for incoming documents and process them.
-func (s *Stdout) Listen() {
+func (s *Output) Listen() {
 	s.ch = make(chan string)
 	for doc := range s.ch {
 		s.write(doc)
@@ -19,19 +20,19 @@ func (s *Stdout) Listen() {
 }
 
 // Push a document for processing.
-func (s *Stdout) Push(doc string) {
+func (s *Output) Push(doc string) {
 	s.ch <- doc
 }
 
-func (s *Stdout) write(doc string) {
+func (s *Output) write(doc string) {
 	fmt.Println(doc)
 }
 
-func init() {
-	RegisterOutput(
+func Register() {
+	io.RegisterOutput(
 		"stdout",
-		func(u *url.URL) (Output, error) {
-			return &Stdout{}, nil
+		func(u *url.URL) (io.Output, error) {
+			return &Output{}, nil
 		},
 	)
 }

@@ -1,6 +1,10 @@
 package io
 
-import "sync"
+import (
+	"encoding/json"
+	"os"
+	"sync"
+)
 
 // Interface for input handlers.
 type Input interface {
@@ -29,10 +33,10 @@ func (i *UnionInput) Listen(o Output) {
 
 	for _, v := range *i {
 		wait.Add(1)
-		go func() {
+		go func(v Input) {
 			defer wait.Done()
 			v.Listen(o)
-		}()
+		}(v)
 	}
 
 	wait.Wait()
@@ -52,11 +56,30 @@ func (o *UnionOutput) Listen() {
 
 	for _, v := range *o {
 		wait.Add(1)
-		go func() {
+		go func(v Output) {
 			defer wait.Done()
 			v.Listen()
-		}()
+		}(v)
 	}
 
 	wait.Wait()
+}
+
+// Encode a message for storage with an Output driver.
+//
+// The original log message is stored in s and any tags stored in m.
+// Returns a JSON document.
+func Encode(s string, m map[string]interface{}) (string, error) {
+	document := map[string]interface{}{
+		"message": s,
+		"host":    os.Getenv("HOSTNAME"),
+		"type":    "logs",
+	}
+
+	for k, v := range m {
+		document[k] = v
+	}
+
+	bytes, err := json.Marshal(document)
+	return string(bytes), err
 }

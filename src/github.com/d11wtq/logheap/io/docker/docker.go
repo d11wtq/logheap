@@ -2,33 +2,13 @@ package docker
 
 import (
 	"bufio"
-	"encoding/json"
 	"github.com/d11wtq/logheap/io"
 	"github.com/samalba/dockerclient"
-	"os"
+	"net/url"
 	"time"
 )
 
-func encode(j Job, s string) (string, error) {
-	var stream string
-
-	switch {
-	case j.Stderr:
-		stream = "stderr"
-	case j.Stdout:
-		stream = "stdout"
-	}
-
-	document := map[string]interface{}{
-		"message": s,
-		"host":    os.Getenv("HOSTNAME"),
-		"stream":  stream,
-	}
-
-	bytes, err := json.Marshal(document)
-	return string(bytes), err
-}
-
+// Job class, for a given container ID
 type Job struct {
 	Id     string
 	Stdout bool
@@ -75,6 +55,22 @@ func (i *Input) run(o io.Output) {
 	}
 }
 
+func (i *Input) tags(job Job, info *dockerclient.ContainerInfo) map[string]interface{} {
+	var stream string
+	switch {
+	case job.Stdout:
+		stream = "stdout"
+	case job.Stderr:
+		stream = "stderr"
+	}
+
+	return map[string]interface{}{
+		"stream":         stream,
+		"container_id":   info.Id,
+		"container_name": info.Name,
+	}
+}
+
 func (i *Input) processLogs(job Job, o io.Output) {
 	opts := dockerclient.LogOptions{
 		Stdout: job.Stdout,
@@ -86,11 +82,13 @@ func (i *Input) processLogs(job Job, o io.Output) {
 
 	for {
 		if info, err := i.client.InspectContainer(job.Id); err == nil {
+			tags := i.tags(job, info)
+
 			if init || info.State.Running {
 				if s, err := i.client.ContainerLogs(job.Id, &opts); err == nil {
 					scanner := bufio.NewScanner(Demuxer(s))
 					for scanner.Scan() {
-						if doc, err := encode(job, scanner.Text()); err == nil {
+						if doc, err := io.Encode(scanner.Text(), tags); err == nil {
 							o.Push(doc)
 						}
 					}
@@ -122,4 +120,14 @@ func (i *Input) filteredContainers() []dockerclient.Container {
 	}
 
 	return ret
+}
+
+// Register this input handler for use.
+func Register() {
+	io.RegisterInput(
+		"docker",
+		func(u *url.URL) (io.Input, error) {
+			return &Input{}, nil
+		},
+	)
 }
