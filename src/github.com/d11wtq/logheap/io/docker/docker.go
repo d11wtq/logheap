@@ -1,5 +1,7 @@
 package docker
 
+// FIXME: Refactor this into smaller pieces, parse the URL given, filter containers.
+
 import (
 	"bufio"
 	"github.com/d11wtq/logheap/io"

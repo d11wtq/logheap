@@ -44,14 +44,14 @@ func main() {
 
 	wait.Add(1)
 	go func() {
-		defer wait.Done()
 		output.Listen()
+		wait.Done()
 	}()
 
 	wait.Add(1)
 	go func() {
-		defer wait.Done()
 		input.Listen(output)
+		wait.Done()
 	}()
 
 	wait.Wait()

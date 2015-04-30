@@ -34,8 +34,8 @@ func (i *UnionInput) Listen(o Output) {
 	for _, v := range *i {
 		wait.Add(1)
 		go func(v Input) {
-			defer wait.Done()
 			v.Listen(o)
+			wait.Done()
 		}(v)
 	}
 
@@ -57,8 +57,8 @@ func (o *UnionOutput) Listen() {
 	for _, v := range *o {
 		wait.Add(1)
 		go func(v Output) {
-			defer wait.Done()
 			v.Listen()
+			wait.Done()
 		}(v)
 	}
 
