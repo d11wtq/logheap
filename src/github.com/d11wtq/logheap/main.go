@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/d11wtq/logheap/io"
 	"github.com/d11wtq/logheap/io/docker"
+	"github.com/d11wtq/logheap/io/redis"
 	"github.com/d11wtq/logheap/io/stdin"
 	"github.com/d11wtq/logheap/io/stdout"
 	"sync"
@@ -28,6 +29,7 @@ func init() {
 	stdin.Register()
 	stdout.Register()
 	docker.Register()
+	redis.Register()
 }
 
 func main() {
